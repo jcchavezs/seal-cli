@@ -1,0 +1,80 @@
+# CI for the seal CLI.
+#
+# Runs on every push to main and every PR. The matrix exists for two
+# reasons: (1) case-true path resolution behaves differently across
+# filesystems, so Linux ext4 + macOS APFS + Windows NTFS each
+# exercise a different code path; (2) the file-lock helper used by
+# seal.WriteFile has platform-specific syscalls, and only a real
+# matrix proves they all work.
+#
+# We don't run go-vet via a separate step because `go test` already
+# runs the vet checks Go ships by default. We do run an explicit
+# `go build` after tests so a build-only regression (e.g. a missing
+# linker directive on darwin/arm64) surfaces here.
+#
+# Go version is pinned to what go.mod declares; bump both together
+# when upgrading. Pinning avoids "CI uses 1.27 but devs use 1.26"
+# drift.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Concurrency: cancel an in-progress run when a new commit lands on
+# the same branch/PR. Saves CI minutes; the latest commit is what
+# we actually care about reviewing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      # fail-fast: false keeps macOS results visible even when the
+      # Linux job is the one that fails (and vice versa). Useful
+      # when chasing platform-specific issues.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Match go.mod's directive - see header comment.
+          go-version: '1.26'
+          # cache: defaults to true with setup-go v5; restores the
+          # module cache between runs so dependency downloads are
+          # one-shot per matrix variant per ref.
+
+      - name: Verify go.mod is tidy
+        # If somebody forgets to run `go mod tidy` after adding a
+        # dependency, this step diffs the file and fails loudly
+        # instead of letting CI silently bring it back into sync.
+        shell: bash
+        run: |
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod/go.sum out of date - run 'go mod tidy'"
+            exit 1
+          fi
+
+      - name: Run tests
+        # -race detects data races; the project doesn't use
+        # goroutines yet but cheap insurance for when it does.
+        # -count=1 disables the test result cache so flakes can't
+        # silently mask themselves.
+        run: go test -race -count=1 ./...
+
+      - name: Build binary
+        # Smoke-test the build path separately from tests so a
+        # build-only regression (e.g. cgo flags, ldflags syntax)
+        # surfaces here.
+        run: go build -o ${{ runner.temp }}/seal ./cmd/seal

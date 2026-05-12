@@ -1,0 +1,91 @@
+# Release workflow: tag-driven cross-platform build.
+#
+# Triggers on any push to a tag matching `v*` (e.g. v1.0.0, v0.2.1-rc.1).
+# Builds a binary for each of five common targets, generates a
+# SHA-256 sidecar for each, and attaches everything to a GitHub
+# Release named after the tag.
+#
+# Why per-binary sidecar files instead of one combined SHA256SUMS:
+# the build matrix runs in parallel, so appending to a single shared
+# file would race. The simpler, no-coordination fix is one sidecar
+# per binary; users can `cat *.sha256` if they want a combined view.
+#
+# -trimpath + -ldflags "-s -w -buildid=" produces reproducible,
+# stripped binaries - smaller artifacts and deterministic hashes
+# across builds of the same commit. -X main.Version=<tag> stamps
+# the binary so `seal --version` reports the release tag rather
+# than the "dev" default.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    # contents: write is required for softprops/action-gh-release to
+    # create the release entry and upload assets to it.
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Same pin as CI; bump both files when upgrading Go.
+          go-version: '1.26'
+
+      - name: Build binary
+        env:
+          # GOOS/GOARCH drive cross-compilation. We don't set CGO_ENABLED
+          # explicitly - the default (0 for cross targets) keeps the
+          # binary statically linked, which is what we want for
+          # easy-to-distribute single-file releases.
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          TAG: ${{ github.ref_name }}
+        # Use bash explicitly so the same script works on the
+        # ubuntu-latest runner regardless of any future default-
+        # shell changes. We avoid embedding ${{...}} expressions
+        # inside the shell script body (they would interpolate
+        # before quoting); reading from env: is the audit-safe
+        # form GitHub's docs recommend.
+        shell: bash
+        run: |
+          OUT="seal-${GOOS}-${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            OUT="${OUT}.exe"
+          fi
+
+          go build \
+            -trimpath \
+            -ldflags "-s -w -buildid= -X main.Version=${TAG}" \
+            -o "$OUT" \
+            ./cmd/seal
+
+          # Per-binary SHA-256 sidecar. shasum is available on the
+          # ubuntu runner. We write "<hash>  <filename>" so a user
+          # can run `shasum -c seal-linux-amd64.sha256` after
+          # downloading the pair.
+          shasum -a 256 "$OUT" > "${OUT}.sha256"
+
+      - name: Attach binary and sidecar to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            seal-${{ matrix.goos }}-${{ matrix.goarch }}*

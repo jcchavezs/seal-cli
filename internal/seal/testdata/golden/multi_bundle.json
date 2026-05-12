@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "policy": "warn",
+  "bundles": {
+    "./.claude/skills/alpha": {
+      "revision": "deadbeefcafef00d",
+      "contentHash": "sha256:4bc6ee3c79cf31fe7f32fb3fbcd0f96027a23dea307e5d3fcc7afa7b292e5989",
+      "files": {
+        "SKILL.md": "sha256:3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe"
+      }
+    },
+    "./.claude/skills/zebra": {
+      "contentHash": "sha256:753146fceb40a27d1a60dec4ef80ac7fe7a09ffb74825800176c49ff1fae73b0",
+      "files": {
+        "a.md": "sha256:42fb0de209d11edcf5f7a7a478349824317accf0217cb25af4247e16fb1d9d90",
+        "b.md": "sha256:62f93e8a9ad9d93768ea6f3393237a0d2067758bde0a02013879c45f2924e21c"
+      }
+    }
+  }
+}

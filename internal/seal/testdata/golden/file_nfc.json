@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "policy": "block",
+  "bundles": {
+    "./.claude/skills/foo": {
+      "contentHash": "sha256:4472dcfda51ae2188944d58022baca2cf4656a6178c60e5857fe79b9ee65d57b",
+      "files": {
+        "café.md": "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+      }
+    }
+  }
+}

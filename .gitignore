@@ -1,0 +1,21 @@
+# Compiled binary outputs (we build into bin/ so source tree stays clean)
+/bin/
+
+# Go test artifacts
+*.test
+*.out
+coverage.txt
+
+# Release artifacts (cross-compiled binaries from the release workflow)
+/dist/
+
+# Lockfile sidecar files (machine-local locking state)
+seal.json.lock
+seal.json.tmp.*
+
+# Agent / IDE local state at the project root (per-user, not shared).
+# Anchored with leading `/` so fixtures under testdata/ aren't swallowed.
+/.claude/
+/.codex/
+/.opencode/
+/.idea/

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "discovery": [
+    ".claude/skills/*",
+    ".claude/plugins/*"
+  ],
+  "policy": "block",
+  "bundles": {}
+}

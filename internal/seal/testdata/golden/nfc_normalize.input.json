@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "policy": "block",
+  "bundles": {
+    "./.claude/skills/café": {
+      "contentHash": "sha256:4bc6ee3c79cf31fe7f32fb3fbcd0f96027a23dea307e5d3fcc7afa7b292e5989",
+      "files": {
+        "SKILL.md": "sha256:3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe"
+      }
+    }
+  }
+}
