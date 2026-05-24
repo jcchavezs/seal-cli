@@ -45,3 +45,30 @@ func TestRun_VerifyMutuallyExclusiveFlags(t *testing.T) {
 		t.Errorf("run([verify --json --quiet]) = %d, want 2", got)
 	}
 }
+
+func TestRun_UpgradeHelpFlag(t *testing.T) {
+	if got := run([]string{"upgrade", "--help"}); got != 0 {
+		t.Errorf("run([upgrade --help]) = %d, want 0", got)
+	}
+}
+
+func TestResolveVersionUsesStampedReleaseVersion(t *testing.T) {
+	got := resolveVersion("v1.2.3", "v1.2.4")
+	if got != "v1.2.3" {
+		t.Fatalf("resolveVersion() = %q, want stamped version", got)
+	}
+}
+
+func TestResolveVersionUsesModuleVersionForGoInstall(t *testing.T) {
+	got := resolveVersion("dev", "v1.2.3")
+	if got != "v1.2.3" {
+		t.Fatalf("resolveVersion() = %q, want module version", got)
+	}
+}
+
+func TestResolveVersionLeavesLocalDevBuildAsDev(t *testing.T) {
+	got := resolveVersion("dev", "(devel)")
+	if got != "dev" {
+		t.Fatalf("resolveVersion() = %q, want dev", got)
+	}
+}

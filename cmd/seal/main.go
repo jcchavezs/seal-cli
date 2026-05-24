@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +19,22 @@ import (
 
 // Version is overridden at release time via -ldflags="-X main.Version=$TAG".
 var Version = "dev"
+
+func init() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		Version = resolveVersion(Version, info.Main.Version)
+	}
+}
+
+func resolveVersion(stampedVersion, moduleVersion string) string {
+	if stampedVersion != "" && stampedVersion != "dev" {
+		return stampedVersion
+	}
+	if moduleVersion != "" && moduleVersion != "(devel)" {
+		return moduleVersion
+	}
+	return stampedVersion
+}
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -69,7 +86,7 @@ func newRootCmd() *cobra.Command {
 		Long:    "seal manages the seal.json lockfile that records the trusted state of project-local agent bundles.",
 		Version: Version,
 	}
-	root.AddCommand(newInitCmd(), newPinCmd(), newVerifyCmd())
+	root.AddCommand(newInitCmd(), newPinCmd(), newVerifyCmd(), newUpgradeCmd())
 	return root
 }
 
@@ -178,5 +195,33 @@ func newVerifyCmd() *cobra.Command {
 		"no output; exit code is the only signal")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false,
 		"show per-file detail in mismatches")
+	return cmd
+}
+
+func newUpgradeCmd() *cobra.Command {
+	var checkOnly bool
+	cmd := &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade seal to the latest released version",
+		Long:  "upgrade checks GitHub Releases for the latest stable seal version and updates the current installation.",
+		RunE: func(c *cobra.Command, args []string) error {
+			exe, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("upgrade: %w", err)
+			}
+			code := cli.RunUpgrade(cli.UpgradeOpts{
+				CurrentVersion: Version,
+				ExePath:        exe,
+				Stderr:         os.Stderr,
+				CheckOnly:      checkOnly,
+			})
+			if code != 0 {
+				return exitCode(code)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&checkOnly, "check", false,
+		"check whether an update is available without installing it")
 	return cmd
 }
