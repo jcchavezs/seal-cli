@@ -31,6 +31,15 @@ Or grab a prebuilt binary from the [releases page](https://github.com/SamyGhanna
 seal --version
 ```
 
+To upgrade later:
+
+```sh
+seal upgrade --check
+seal upgrade
+```
+
+`seal upgrade` uses `go install ...@latest` for Go-installed binaries. For prebuilt release binaries, it downloads the matching GitHub Release asset, verifies the `.sha256` sidecar, and replaces the local executable where the OS permits it.
+
 ---
 
 ## Quickstart
