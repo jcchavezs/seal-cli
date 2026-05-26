@@ -9,8 +9,7 @@ coverage.txt
 # Release artifacts (cross-compiled binaries from the release workflow)
 /dist/
 
-# Lockfile sidecar files (machine-local locking state)
-seal.json.lock
+# Lockfile atomic-write staging files
 seal.json.tmp.*
 
 # Agent / IDE local state at the project root (per-user, not shared).

@@ -1,7 +1,10 @@
 package seal
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -13,7 +16,7 @@ import (
 // WriteFile encodes a Lockfile and writes it to path with two guarantees
 // stacked together:
 //
-//  1. Concurrency: an exclusive flock on a sibling .lock file serialises
+//  1. Concurrency: an exclusive flock on a cache-local .lock file serialises
 //     writers so two CLIs can't interleave encode-then-rename.
 //  2. Crash atomicity: bytes go to a sibling .tmp.<pid>.<rand> file, then
 //     os.Rename over the target. Readers always see either the old file or
@@ -30,16 +33,25 @@ func WriteFile(path string, lf *Lockfile) error {
 		return fmt.Errorf("encode: %w", err)
 	}
 
-	// Lock a sibling .lock file (not the target): avoids the chicken-and-egg
-	// of needing to lock a file that may not exist yet (`seal init` creates
-	// seal.json from scratch).
-	lk := flock.New(path + ".lock")
+	// Use a cache-local flock target, not path+".lock". The lock target file
+	// is just a shared inode for the kernel lock; its existence is not the
+	// lock. Removing it after unlock looks tidy, but is unsafe under contention:
+	// a process can open the old inode and block in flock, then another process
+	// can unlink the pathname after it finishes. A later process recreates the
+	// same pathname as a new inode and locks that, while the earlier waiter may
+	// still acquire the old unlinked inode. At that point two writers believe
+	// they hold the same lock, but the kernel sees two different files.
+	lockPath, err := writeLockPath(path)
+	if err != nil {
+		return err
+	}
+	lk := flock.New(lockPath)
 	if err := lk.Lock(); err != nil {
 		return fmt.Errorf("lock %s: %w", lk.Path(), err)
 	}
-	// Ignore Unlock error: it would mask the actual write error, and the
-	// lock releases on process exit anyway.
-	defer func() { _ = lk.Unlock() }()
+	// Unlock errors are worth surfacing, but should not mask the actual write
+	// result; the OS releases the lock on process exit anyway.
+	defer unlockAndLog(lk, log.Printf)
 
 	// pid + rand keeps temp names unique even if flock is bypassed and avoids
 	// surprises from stale temps left by interrupted runs.
@@ -69,6 +81,42 @@ func tempPath(target string) string {
 	base := filepath.Base(target)
 	suffix := ".tmp." + strconv.Itoa(os.Getpid()) + "." + strconv.Itoa(rand.Intn(1<<30))
 	return filepath.Join(dir, base+suffix)
+}
+
+type unlocker interface {
+	Path() string
+	Unlock() error
+}
+
+func unlockAndLog(lk unlocker, logf func(string, ...any)) {
+	if err := lk.Unlock(); err != nil {
+		logf("seal: unlock %s: %v", lk.Path(), err)
+	}
+}
+
+// writeLockPath returns the stable flock rendezvous path for target.
+//
+// We use flock instead of "lock file exists" because existence-based locks need
+// atomic O_EXCL creation, stale PID/host recovery, PID-reuse handling, and
+// manual cleanup after crashes. Kernel locks give atomic acquisition and
+// automatic release on process exit. The rendezvous file may remain, so it
+// belongs in user cache/temp state rather than in arbitrary repositories.
+func writeLockPath(target string) (string, error) {
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("resolve lock path: %w", err)
+	}
+	sum := sha256.Sum256([]byte(abs))
+
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	dir := filepath.Join(base, "seal-cli", "locks")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("create lock dir: %w", err)
+	}
+	return filepath.Join(dir, hex.EncodeToString(sum[:])+".lock"), nil
 }
 
 // syncDir fsyncs the directory so renames inside it become durable. Split
