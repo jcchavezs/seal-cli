@@ -1,6 +1,7 @@
 package seal
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,46 @@ func TestWriteFile_AtomicCleanup(t *testing.T) {
 		if strings.Contains(e.Name(), ".tmp.") {
 			t.Errorf("temp file leaked: %s", e.Name())
 		}
+	}
+}
+
+// TestWriteFile_LockCleanup verifies the flock sentinel file is not left in
+// the project after a successful write. A stale file does not hold the OS lock,
+// but leaving it beside seal.json is noisy for users and git status.
+func TestWriteFile_LockCleanup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seal.json")
+	if err := WriteFile(path, newValidLockfile()); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatalf("lock file should be removed after successful write, stat err=%v", err)
+	}
+}
+
+type fakeUnlocker struct {
+	path string
+	err  error
+}
+
+func (f fakeUnlocker) Path() string {
+	return f.path
+}
+
+func (f fakeUnlocker) Unlock() error {
+	return f.err
+}
+
+func TestUnlockAndLog_LogsUnlockError(t *testing.T) {
+	var logs []string
+	unlockAndLog(fakeUnlocker{path: "seal.json.lock", err: os.ErrPermission}, func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	})
+	if len(logs) != 1 {
+		t.Fatalf("expected one log entry, got %d", len(logs))
+	}
+	if !strings.Contains(logs[0], "unlock seal.json.lock") {
+		t.Fatalf("log should include lock path, got %q", logs[0])
 	}
 }
 
