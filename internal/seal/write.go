@@ -110,6 +110,7 @@ func writeLockPath(target string) (string, error) {
 
 	base, err := os.UserCacheDir()
 	if err != nil {
+		log.Printf("seal: UserCacheDir unavailable, falling back to TempDir: %v", err)
 		base = os.TempDir()
 	}
 	dir := filepath.Join(base, "seal-cli", "locks")
