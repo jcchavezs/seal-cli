@@ -42,10 +42,10 @@ jobs:
           - { goos: windows, goarch: amd64 }
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           # Same pin as CI; bump both files when upgrading Go.
           go-version: '1.26'
@@ -85,7 +85,7 @@ jobs:
           shasum -a 256 "$OUT" > "${OUT}.sha256"
 
       - name: Attach binary and sidecar to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             seal-${{ matrix.goos }}-${{ matrix.goarch }}*
